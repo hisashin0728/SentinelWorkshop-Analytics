@@ -238,7 +238,6 @@ let lookbackTime     = 1d;    // 過去何日分を参照するか
 let timeWindow       = 15m;   // 集計する時間窓（bin の単位）
 let failureThreshold = 10;    // 警告を発するサインイン失敗回数の閾値
 // ================================================
-
 SignInLogs
 | where TimeGenerated >= ago(lookbackTime)
 | where ResultType != 0                          // 失敗したサインインのみ (ResultType=0 は成功)
@@ -334,7 +333,6 @@ let lookbackTime      = 1d;   // 過去何日分を参照するか
 let timeWindow        = 1h;   // 集計する時間窓
 let mfaFailThreshold  = 5;    // この回数以上の MFA 失敗でアラート
 // ================================================
-
 SignInLogs
 | where TimeGenerated >= ago(lookbackTime)
 | where ResultType == 50074                       // MFA チャレンジ失敗のみ
@@ -450,7 +448,6 @@ let timeInterval        = 1h;    // 時系列の集計単位
 let anomalyThreshold    = 2.5;   // 異常スコアのしきい値（高いほど感度が下がる）
 let detectionLookback   = 1d;    // アラートとして出力する直近期間
 // ================================================
-
 SignInLogs
 | where TimeGenerated >= ago(lookbackPeriod)
 | where ResultType != 0                         // 失敗したサインインのみ
@@ -592,7 +589,6 @@ let lookbackTime       = 1d;
 let timeWindow         = 1h;    // 集計する時間窓
 let deletionThreshold  = 5;     // この件数以上の削除でアラート
 // ================================================
-
 AzureActivity
 | where TimeGenerated >= ago(lookbackTime)
 | where OperationNameValue endswith "/DELETE"   // DELETE 操作すべてに一致
