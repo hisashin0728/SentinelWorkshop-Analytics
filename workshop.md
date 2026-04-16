@@ -14,7 +14,8 @@
 | 0:10〜0:25 | [分析ルール概要・基本手順](#1-分析ルール概要) |
 | 0:25〜0:45 | [Lab 1: Azure VM 再起動検知（特定条件）](#lab-1-azure-vm-再起動検知特定条件パターン) |
 | 0:45〜1:05 | [Lab 2: EntraID サインイン失敗閾値アラート（閾値）](#lab-2-entraid-サインイン失敗閾値アラート閾値パターン) |
-| 1:05〜1:25 | [Lab 3: 異常なサインインボリューム検知（アノマリー）](#lab-3-異常なサインインボリューム検知アノマリーパターン) |
+| 1:05〜1:15 | [Lab 2-2: MFA チャレンジ失敗 閾値アラート（閾値）](#lab-2-2-mfa-チャレンジ失敗-閾値アラート閾値パターン) |
+| 1:15〜1:35 | [Lab 3: 異常なサインインボリューム検知（アノマリー）](#lab-3-異常なサインインボリューム検知アノマリーパターン) |
 | 1:25〜1:35 | [Lab 4: Azure RBAC 特権ロール割り当て検知（特定条件）](#lab-4-azure-rbac-特権ロール割り当て検知特定条件パターン) |
 | 1:35〜1:45 | [Lab 5: 大量リソース削除検知（閾値）](#lab-5-大量リソース削除検知閾値パターン) |
 | 1:45〜1:55 | [応用 Lab: 脅威アクター（パスワードスプレー）検知](#応用-lab-脅威アクター--パスワードスプレー攻撃midnight-blizzard-スタイル) |
@@ -295,6 +296,110 @@ SignInLogs
 **アラートの詳細**（動的タイトル）:
 
 - アラート名の形式: `EntraID サインイン失敗アラート - {{UserPrincipalName}} ({{FailureCount}} 回)`
+
+---
+
+## Lab 2-2: MFA チャレンジ失敗 閾値アラート（閾値パターン）
+
+### シナリオ概要
+
+同一ユーザーに対して短時間に **MFA チャレンジの失敗**が多発した場合にアラートを生成します。MFA 疲労攻撃（MFA Fatigue / MFA Bombing）や、フィッシングによる認証情報窃取後に MFA を突破しようとする試みの早期検知を目的とします。
+
+- **データソース**: `SignInLogs`
+- **ResultType**: `50074`（Strong Authentication is required / ユーザーが MFA チャレンジに失敗）
+- **パターン**: 閾値パターン（Lab 2 と同様）
+- **参考クエリ**: [Failed MFA challenge — SignInLogs クエリリファレンス](https://docs.azure.cn/en-us/azure-monitor/reference/queries/signinlogs#failed-mfa-challenge)
+
+> **MFA 疲労攻撃とは**: 攻撃者がすでに入手したパスワードで繰り返しサインインを試み、MFA プッシュ通知をユーザーに大量送信することで、ユーザーが誤って承認してしまうことを狙う攻撃手法です。
+
+### KQL クエリ
+
+```kql
+// ===== パラメータ設定（let で変更しやすく） =====
+let lookbackTime      = 1d;   // 過去何日分を参照するか
+let timeWindow        = 1h;   // 集計する時間窓
+let mfaFailThreshold  = 5;    // この回数以上の MFA 失敗でアラート
+// ================================================
+
+SignInLogs
+| where TimeGenerated >= ago(lookbackTime)
+| where ResultType == 50074                       // MFA チャレンジ失敗のみ
+| summarize
+    MfaFailCount      = count(),
+    FailedResources   = dcount(ResourceDisplayName),
+    ResourceList      = make_set(ResourceDisplayName, 10),
+    AppList           = make_set(AppDisplayName, 5),
+    IPAddresses       = make_set(IPAddress, 10),
+    ResultDescription = any(ResultDescription),
+    FirstFailure      = min(TimeGenerated),
+    LastFailure       = max(TimeGenerated)
+    by UserPrincipalName, UserDisplayName, bin(TimeGenerated, timeWindow)
+| where MfaFailCount >= mfaFailThreshold          // 閾値判定
+| extend DurationMinutes = datetime_diff("minute", LastFailure, FirstFailure)
+| project
+    LastFailure,
+    UserPrincipalName,
+    UserDisplayName,
+    MfaFailCount,
+    DurationMinutes,
+    FailedResources,
+    ResourceList,
+    AppList,
+    IPAddresses,
+    ResultDescription
+| extend AccountCustomEntity = UserPrincipalName
+| order by MfaFailCount desc
+```
+
+**クエリのポイント**:
+
+| 行 | 説明 |
+|----|------|
+| `ResultType == 50074` | MFA チャレンジ失敗のエラーコード。Lab 2 では除外していた対象を今回は専用ルールで検知 |
+| `let mfaFailThreshold = 5` | MFA 疲労攻撃では短時間に集中するため、Lab 2 の閾値より低めに設定 |
+| `dcount(ResourceDisplayName)` | 複数リソースへの MFA 失敗は攻撃の広がりを示す |
+| `DurationMinutes` | 短時間（例: 5 分以内）での集中はより高い脅威度を示す |
+
+> **補足 — ResultType 50074 と 50076 の違い**:
+> - `50074`: ユーザーが MFA チャレンジ自体に失敗（間違った OTP 入力、プッシュ拒否など）
+> - `50076`: MFA が必要だが、クライアントが要求を満たせなかった（デバイス側の問題）
+
+### 分析ルール作成手順
+
+#### ① 全般設定タブ
+
+| 項目 | 設定値 |
+|------|--------|
+| 名前 | `EntraID MFA チャレンジ失敗 閾値アラート` |
+| 重大度 | 高 (High) |
+| 戦術と手法 | Credential Access > T1111 Multi-Factor Authentication Interception |
+
+#### ② ルールロジックタブ
+
+- 実行間隔: **15 分ごと**
+- データの参照: **過去 1 日**
+- アラートしきい値: **より大きい → 0**
+
+#### ③ アラート強化タブ
+
+**エンティティマッピング**:
+
+| エンティティ | 識別子 | 列名 |
+|-------------|--------|------|
+| Account | FullName | UserPrincipalName |
+
+**カスタム詳細**:
+
+| キー | 列名 |
+|------|------|
+| MfaFailCount | MfaFailCount |
+| DurationMinutes | DurationMinutes |
+| TargetResources | ResourceList |
+| IPAddresses | IPAddresses |
+
+**アラートの詳細**（動的タイトル）:
+
+- アラート名の形式: `MFA 失敗アラート - {{UserPrincipalName}} ({{MfaFailCount}} 回 / {{DurationMinutes}} 分以内)`
 
 ---
 
