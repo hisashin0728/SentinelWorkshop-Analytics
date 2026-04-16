@@ -108,10 +108,19 @@ flowchart LR
 
 ### 2.2 操作手順
 
-1. Azure Portal で **Microsoft Sentinel** を開く
-2. 左メニュー「**構成**」→「**分析**」→「**＋ 作成**」→「**スケジュール済みクエリ ルール**」をクリック
-3. 各タブの設定を順に入力する（詳細は各 Lab で説明）
-4. 「**レビューと作成**」でルールを保存する
+1. Microsoft Defender ポータル（`security.microsoft.com`）の左メニュー「**Microsoft Sentinel**」を開く
+2. 「**構成**」→「**分析**」を選択し、分析ルール一覧画面を開く
+
+   ![Sentinel 分析ルール一覧](images/01_sentinel-analytics-list.png)
+   > 📸 **`images/01_sentinel-analytics-list.png`** — Defender ポータル上の Sentinel 分析ルール一覧画面
+
+3. 「**＋ 作成**」をクリックし、「**スケジュール済みクエリ ルール**」を選択する
+
+   ![スケジュール済みクエリルール作成メニュー](images/02_analytics-rule-create-menu.png)
+   > 📸 **`images/02_analytics-rule-create-menu.png`** — 「＋ 作成」ドロップダウンでルール種類を選択する画面
+
+4. 各タブの設定を順に入力する（詳細は各 Lab で説明）
+5. 「**レビューと作成**」でルールを保存する
 
 > **メモ**: NRT（ほぼリアルタイム）ルールはクエリ実行間隔が 1 分程度に短縮されます。アラート生成数の増加に注意してください。
 
@@ -174,6 +183,9 @@ AzureActivity
 | 戦術と手法 | Impact > T1529 System Shutdown/Reboot |
 | 状態 | 有効 |
 
+![全般設定タブ](images/03_wizard-general.png)
+> 📸 **`images/03_wizard-general.png`** — ルール名・重大度・MITRE 戦術を設定する「全般」タブ
+
 #### ② ルールロジックタブ
 
 1. 「**ルール クエリ**」に上記 KQL を貼り付ける
@@ -182,6 +194,9 @@ AzureActivity
    - データの参照: **過去 1 日**
 3. 「**クエリ結果の警告しきい値**」
    - 次の場合にアラートを生成: **より大きい** → `0`
+
+![ルールロジックタブ](images/04_wizard-rule-logic.png)
+> 📸 **`images/04_wizard-rule-logic.png`** — KQL クエリ入力・スケジュール・しきい値を設定する「ルールロジック」タブ
 
 #### ③ アラート強化タブ（エンティティマッピング）
 
@@ -199,10 +214,16 @@ AzureActivity
 | ResourceGroup | ResourceGroup |
 | VMName | Resource |
 
+![アラート強化タブ](images/05_wizard-alert-enhancement.png)
+> 📸 **`images/05_wizard-alert-enhancement.png`** — エンティティマッピング・カスタム詳細を設定する「アラート強化」タブ
+
 #### ④ インシデント設定タブ
 
 - インシデントの自動作成: **有効**
 - アラートのグループ化: 後述の「グループ機能」セクションで詳しく設定
+
+![インシデント設定タブ](images/06_wizard-incident-settings.png)
+> 📸 **`images/06_wizard-incident-settings.png`** — インシデント自動作成・アラートグループ化を設定する「インシデント設定」タブ
 
 ---
 
@@ -799,6 +820,9 @@ flowchart TD
 | グループ化のタイムウィンドウ | 何時間以内のアラートを同一インシデントにまとめるか | **5 時間** |
 | 再オープンされた一致するインシデントへのアラートのグループ化 | 一度クローズされたインシデントを再オープンするか | 要件に応じて設定 |
 | グループ化の条件 | どのエンティティが一致したときにグループ化するか | 下記参照 |
+
+![アラートグループ化設定](images/07_alert-grouping-settings.png)
+> 📸 **`images/07_alert-grouping-settings.png`** — 「インシデント設定」タブのアラートグループ化設定セクション
 
 #### 手順 3: グループ化条件を選択する
 
